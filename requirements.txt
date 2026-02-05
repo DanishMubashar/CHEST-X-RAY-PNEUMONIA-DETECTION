@@ -1,7 +1,7 @@
 streamlit
 tensorflow
 numpy
-opencv-python
+opencv-python-headless
 pillow
 matplotlib
 langchain-google-genai
