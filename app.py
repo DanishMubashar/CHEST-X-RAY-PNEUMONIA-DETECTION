@@ -22,13 +22,13 @@ IMG_SIZE = (256, 256)
 def load_model_fixed():
     try:
         path = hf_hub_download(repo_id=REPO_ID, filename=FILENAME)
-        # Keras 3 compatibility fix: safe_mode=False
-        # Agar dense layer mismatch ho, toh aksar compile=False zaroori hota hai
+        
+        # FIX: safe_mode=False aur compile=False is error ko bypass karne ke liye lazmi hain
+        # Kyunki Dense layer architecture mismatch kar rahi hai naye Keras version ke saath
         model = tf.keras.models.load_model(path, compile=False, safe_mode=False)
         
-        # Ek dummy prediction run karte hain taake layers initialize ho jayein
-        dummy_input = np.zeros((1, 256, 256, 3))
-        model(dummy_input) 
+        # Model ko build karna zaroori hai taake layers batch dimension (ndim=2) ko samajh sakein
+        model.build((None, 256, 256, 3)) 
         
         return model
     except Exception as e:
@@ -40,13 +40,17 @@ model = load_model_fixed()
 # --- 2. Heatmap Logic ---
 def get_gradcam(img_array, model):
     try:
-        # DenseNet121 ki last conv layer dhundna
+        # DenseNet121 standard activation layer
         last_conv_layer_name = "relu"
+        
+        # Accessing the base model if nested
         target_source = model.layers[0] if hasattr(model.layers[0], 'get_layer') else model
         
         grad_model = tf.keras.models.Model(
-            [target_source.inputs], [target_source.get_layer(last_conv_layer_name).output, model.output]
+            [target_source.inputs], 
+            [target_source.get_layer(last_conv_layer_name).output, model.output]
         )
+        
         with tf.GradientTape() as tape:
             conv_outputs, predictions = grad_model(img_array)
             loss = predictions[:, 0]
@@ -71,6 +75,7 @@ with st.sidebar:
     uploaded_file = st.file_uploader("Upload X-Ray", type=["jpg", "png", "jpeg"])
 
 if uploaded_file and p_name:
+    # Image decoding
     file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
     image = cv2.imdecode(file_bytes, 1)
     img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -81,11 +86,11 @@ if uploaded_file and p_name:
 
     if st.button("Analyze X-Ray"):
         if model is not None:
-            with st.spinner("Model analyzing..."):
-                # FIX: Preprocessing with correct float conversion
+            with st.spinner("AI is analyzing the scan..."):
+                # Preprocessing
                 img_res = cv2.resize(img_rgb, IMG_SIZE)
                 img_array = np.array(img_res, dtype=np.float32) / 255.0
-                img_array = np.expand_dims(img_array, axis=0) # Add batch dimension
+                img_array = np.expand_dims(img_array, axis=0) # Adding Batch Dimension
                 
                 # Model Prediction
                 preds = model.predict(img_array, verbose=0)
@@ -95,7 +100,7 @@ if uploaded_file and p_name:
                 diagnosis = "PNEUMONIA" if is_p else "NORMAL"
                 confidence = f"{round(score*100 if is_p else (1-score)*100, 2)}%"
                 
-                # Heatmap
+                # Grad-CAM Heatmap
                 heatmap = get_gradcam(img_array, model)
                 heatmap = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
                 heatmap = np.uint8(255 * heatmap)
@@ -103,17 +108,19 @@ if uploaded_file and p_name:
                 superimposed = cv2.addWeighted(image, 0.6, jet_heatmap, 0.4, 0)
                 
                 with col2:
-                    st.image(cv2.cvtColor(superimposed, cv2.COLOR_BGR2RGB), caption="AI Visualization", use_container_width=True)
-                    st.metric("Result", diagnosis)
-                    st.metric("Confidence", confidence)
+                    st.image(cv2.cvtColor(superimposed, cv2.COLOR_BGR2RGB), caption="AI Heatmap Visualization", use_container_width=True)
+                    st.metric("Final Result", diagnosis)
+                    st.metric("Confidence Score", confidence)
                 
-                # Report
+                # Gemini Analysis
                 api_key = os.getenv("GEMINI_API_KEY")
                 if api_key:
-                    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=api_key)
-                    report = llm.invoke(f"Write a short medical report for {p_name}, {p_age}y, {p_gen}. Diagnosis: {diagnosis} ({confidence}).").content
-                    st.info(report)
-                else:
-                    st.warning("API Key missing.")
+                    try:
+                        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=api_key)
+                        report = llm.invoke(f"Write a clinical radiology report for {p_name}, {p_age}y/o {p_gen}. AI detected {diagnosis} with {confidence} confidence.").content
+                        st.markdown("### 👨‍⚕️ Clinical Analysis")
+                        st.write(report)
+                    except:
+                        st.warning("Report generation failed but diagnosis is complete.")
         else:
-            st.error("Model is not initialized.")
+            st.error("Model initialization failed. Please check logs.")
