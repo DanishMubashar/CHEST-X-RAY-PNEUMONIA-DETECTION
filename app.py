@@ -199,7 +199,59 @@ def preprocess_image(image, target_size=(256, 256)):
     
     return img_array
 
-# --- 4. Main UI ---
+# --- 4. Helper Functions ---
+def display_default_report(name, age, gender, diagnosis, confidence, is_pneumonia):
+    """Display a default clinical report when Gemini API is not available"""
+    if is_pneumonia:
+        findings = "Bilateral lung consolidation with air bronchograms noted. Opacities predominantly in the lower lobes."
+        impression = "Findings consistent with community-acquired pneumonia."
+        recommendations = """1. Start appropriate antibiotic therapy based on local guidelines.
+2. Consider follow-up chest X-ray in 2-3 weeks.
+3. Monitor oxygen saturation and consider hospitalization if respiratory distress develops."""
+        history = "productive cough, fever, and shortness of breath"
+        pleural = "Small pleural effusion noted on the right side."
+    else:
+        findings = "Clear lung fields with normal vascular markings."
+        impression = "No acute cardiopulmonary abnormality."
+        recommendations = """1. No immediate intervention required.
+2. Routine follow-up as per primary care physician."""
+        history = "routine screening"
+        pleural = "No pleural effusion or thickening."
+    
+    report = f"""
+    **RADIOLOGY REPORT**
+    
+    **Patient:** {name}
+    **Age:** {age}
+    **Gender:** {gender}
+    **Study Date:** {st.session_state.get('report_date', 'Current Date')}
+    **Study:** Chest X-Ray PA View
+    
+    **CLINICAL HISTORY:**
+    Patient presents with {history}.
+    
+    **FINDINGS:**
+    - Lungs: {findings}
+    - Heart: Normal cardiomediastinal silhouette.
+    - Pleura: {pleural}
+    - Bones: No acute bony abnormality.
+    
+    **IMPRESSION:**
+    {impression}
+    
+    **RECOMMENDATIONS:**
+    {recommendations}
+    
+    **AI ASSISTED DIAGNOSIS:**
+    - Result: {diagnosis}
+    - Confidence: {confidence}
+    
+    **Disclaimer:** This is an AI-generated report. Always consult with a qualified radiologist.
+    """
+    
+    st.markdown(report)
+
+# --- 5. Main UI ---
 st.title("🫁 PneumoCare AI: Advanced Pneumonia Detection")
 st.markdown("---")
 
@@ -403,46 +455,6 @@ if uploaded_file is not None:
         
         elif not p_name:
             st.warning("⚠️ Please enter patient name to start analysis")
-
-def display_default_report(name, age, gender, diagnosis, confidence, is_pneumonia):
-    """Display a default clinical report when Gemini API is not available"""
-    report = f"""
-    **RADIOLOGY REPORT**
-    
-    **Patient:** {name}
-    **Age:** {age}
-    **Gender:** {gender}
-    **Study Date:** {st.session_state.get('report_date', 'Current Date')}
-    **Study:** Chest X-Ray PA View
-    
-    **CLINICAL HISTORY:**
-    Patient presents with { 'productive cough, fever, and shortness of breath' if is_pneumonia else 'routine screening' }.
-    
-    **FINDINGS:**
-    - Lungs: {'Bilateral lung consolidation with air bronchograms noted. Opacities predominantly in the lower lobes.' if is_pneumonia else 'Clear lung fields with normal vascular markings.'}
-    - Heart: Normal cardiomediastinal silhouette.
-    - Pleura: {'Small pleural effusion noted on the right side.' if is_pneumonia else 'No pleural effusion or thickening.'}
-    - Bones: No acute bony abnormality.
-    
-    **IMPRESSION:**
-    { 'Findings consistent with community-acquired pneumonia.' if is_pneumonia else 'No acute cardiopulmonary abnormality.' }
-    
-    **RECOMMENDATIONS:**
-    { '1. Start appropriate antibiotic therapy based on local guidelines.
-    2. Consider follow-up chest X-ray in 2-3 weeks.
-    3. Monitor oxygen saturation and consider hospitalization if respiratory distress develops.' 
-    if is_pneumonia else 
-    '1. No immediate intervention required.
-    2. Routine follow-up as per primary care physician.'}
-    
-    **AI ASSISTED DIAGNOSIS:**
-    - Result: {diagnosis}
-    - Confidence: {confidence}
-    
-    **Disclaimer:** This is an AI-generated report. Always consult with a qualified radiologist.
-    """
-    
-    st.markdown(report)
 
 # Welcome screen
 else:
