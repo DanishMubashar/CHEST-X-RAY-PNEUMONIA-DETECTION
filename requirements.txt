@@ -1,0 +1,10 @@
+tensorflow
+gradio
+langchain-google-genai
+langchain
+huggingface_hub
+python-dotenv
+pillow
+opencv-python
+matplotlib
+fpdf
